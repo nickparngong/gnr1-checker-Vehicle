@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="th">
 <head>
@@ -158,7 +159,7 @@ async function search(){
         </div>
         <div class="section"><div class="section-head">🛡️ ข้อมูลประกันภัย</div>
           <div class="insurance">${row("บริษัทประกันภัย",v["บริษัทประกันภัย"])}${row("เบอร์โทรประกัน",v["เบอร์โทรประกัน"])}
-          ${tel?`<a class="call" href="tel:${tel}">📞 โทรบริษัทประกันภัย</a>`:""}${String(v["ลิงก์แจ้งซ่อม"] || "").trim() ? `<a class="repair" href="${esc(String(v["ลิงก์แจ้งซ่อม"]).trim())}" target="_blank" rel="noopener noreferrer">🛠️ แจ้งเช็คระยะและรายการอื่นๆ</a>` : ""}</div>
+          ${tel?`<a class="call" href="tel:${tel}">📞 โทรบริษัทประกันภัย</a>`:""}${String(v.repairLink || v["ลิงก์แจ้งซ่อม"] || "").trim() ? `<a class="repair" href="${esc(String(v["ลิงก์แจ้งซ่อม"]).trim())}" target="_blank" rel="noopener noreferrer">🛠️ แจ้งเช็คระยะและรายการอื่นๆ</a>` : ""}</div>
         </div>
       </div>`;
     result.style.display="block";
