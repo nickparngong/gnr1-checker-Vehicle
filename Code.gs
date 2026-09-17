@@ -1,5 +1,5 @@
-// Vehicle Check V2 - Google Apps Script
-// อ่านข้อมูลจาก Google Sheet โดยตรงด้วย Spreadsheet ID
+// Vehicle Check V2.3 - Backend FIX
+// Google Sheet: A:J existing fields, K = ลิงก์แจ้งซ่อม
 const SPREADSHEET_ID = "1XV_ETbWJFCrAPuYv59KVzq7vGbMVDBAWBweTf2QjGGE";
 const SHEET_NAME = "Vehicle_Master";
 
@@ -22,29 +22,45 @@ function findVehicle_(plate) {
   if (data.length < 2) return {found:false, error:"ไม่พบข้อมูลใน Sheet"};
 
   const headers = data[0].map(h => String(h).trim());
-  const plateColumn = headers.indexOf("ทะเบียนรถ");
+  const plateColumn = headers.findIndex(h => normalizeHeader_(h) === normalizeHeader_("ทะเบียนรถ"));
   if (plateColumn < 0) return {found:false, error:"ไม่พบคอลัมน์ ทะเบียนรถ"};
 
-  const target = normalize_(plate);
+  // Find K by header when possible; otherwise use column K (index 10)
+  // because the current sheet structure has K = ลิงก์แจ้งซ่อม.
+  let repairColumn = headers.findIndex(h => normalizeHeader_(h) === normalizeHeader_("ลิงก์แจ้งซ่อม"));
+  if (repairColumn < 0 && data[0].length >= 11) repairColumn = 10;
+
+  const target = normalizePlate_(plate);
   if (!target) return {found:false, error:"ไม่ได้ระบุทะเบียนรถ"};
 
   for (let i = 1; i < data.length; i++) {
-    if (normalize_(data[i][plateColumn]) === target) {
+    if (normalizePlate_(data[i][plateColumn]) === target) {
       const vehicle = {};
       headers.forEach((h,j) => vehicle[h] = data[i][j]);
+
+      // Dedicated field makes the frontend independent of header quirks.
+      vehicle.repairLink = repairColumn >= 0 ? String(data[i][repairColumn] || "").trim() : "";
       vehicle.found = true;
       return vehicle;
     }
   }
+
   return {found:false, searched:plate};
 }
 
-function normalize_(value) {
+function normalizePlate_(value) {
   return String(value || "")
     .replace(/\s/g,"")
     .replace(/-/g,"")
     .trim()
     .toUpperCase();
+}
+
+function normalizeHeader_(value) {
+  return String(value || "")
+    .replace(/\s/g,"")
+    .trim()
+    .toLowerCase();
 }
 
 function jsonResponse_(data) {
