@@ -54,6 +54,8 @@ input:focus{border-color:var(--navy2);background:#fff;box-shadow:0 0 0 4px rgba(
 .value{text-align:right;font-weight:800;word-break:break-word}
 .insurance{background:#F8FAFD;border:1px solid #E8EDF4;border-radius:14px;padding:10px;margin-top:9px}
 .call{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:12px;margin-top:10px;border-radius:12px;background:var(--green);color:#fff;text-decoration:none;font-size:13px;font-weight:900}
+.repair{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:12px;margin-top:9px;border-radius:12px;background:#06C755;color:#fff;text-decoration:none;font-size:13px;font-weight:900}.repair:active{transform:scale(.99)}
+.repair-modal{display:none;position:fixed;inset:0;background:rgba(7,26,51,.58);z-index:1000;padding:18px;align-items:flex-end;justify-content:center}.repair-modal.show{display:flex}.repair-box{width:100%;max-width:560px;background:#fff;border-radius:20px 20px 14px 14px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.25)}.repair-title{font-size:17px;font-weight:900;color:var(--navy);margin-bottom:12px}.repair-info{background:#F5F8FC;border-radius:13px;padding:12px;font-size:12px;line-height:1.65}.repair-info b{color:var(--navy)}.repair-actions{display:flex;gap:8px;margin-top:12px}.repair-go,.repair-cancel{flex:1;border:0;border-radius:12px;padding:12px;font-size:12px;font-weight:900;cursor:pointer}.repair-go{background:#06C755;color:#fff}.repair-cancel{background:#EEF2F6;color:var(--navy)}
 .gnr{margin-top:12px;padding:16px;text-align:center;background:var(--navy);color:#fff}
 .gnr-title{font-size:14px;font-weight:900}.gnr-sub{font-size:10.5px;opacity:.7;margin:3px 0 11px}
 .tel-grid{display:flex;gap:7px;justify-content:center}
@@ -110,8 +112,20 @@ input:focus{border-color:var(--navy2);background:#fff;box-shadow:0 0 0 4px rgba(
     </div>
   </section>
 
+
+  <div id="repairModal" class="repair-modal" onclick="if(event.target===this)closeRepair()">
+    <div class="repair-box">
+      <div class="repair-title">🛠️ แจ้งเช็คระยะและรายการอื่นๆ</div>
+      <div id="repairInfo" class="repair-info"></div>
+      <div class="repair-actions">
+        <button class="repair-cancel" type="button" onclick="closeRepair()">ยกเลิก</button>
+        <button class="repair-go" type="button" onclick="goRepair()">ไปยังช่องทางแจ้งงาน</button>
+      </div>
+    </div>
+  </div>
+
   <div id="installHelp" class="install-help"></div>
-  <div class="footer">Vehicle Check V2 • Mobile / PWA • GNR1</div>
+  <div class="footer">Vehicle Check V2.3 • Mobile / PWA • GNR1</div>
 </main>
 
 <script>
@@ -155,7 +169,7 @@ async function search(){
         </div>
         <div class="section"><div class="section-head">🛡️ ข้อมูลประกันภัย</div>
           <div class="insurance">${row("บริษัทประกันภัย",v["บริษัทประกันภัย"])}${row("เบอร์โทรประกัน",v["เบอร์โทรประกัน"])}
-          ${tel?`<a class="call" href="tel:${tel}">📞 โทรบริษัทประกันภัย</a>`:""}</div>
+          ${tel?`<a class="call" href="tel:${tel}">📞 โทรบริษัทประกันภัย</a>`:""}${isSafeRepairUrl(v["ลิงก์แจ้งซ่อม"]) ? `<a class="repair" href="#" onclick="openRepair(event, ${JSON.stringify(String(v["ลิงก์แจ้งซ่อม"] || ""))}, ${JSON.stringify(String(v["ทะเบียนรถ"] || ""))}, ${JSON.stringify(String(v["Vendor"] || ""))})">🛠️ แจ้งเช็คระยะและรายการอื่นๆ</a>` : ""}</div>
         </div>
       </div>`;
     result.style.display="block";
@@ -167,6 +181,31 @@ async function search(){
 searchBtn.addEventListener("click",search);
 q.addEventListener("keydown",e=>{if(e.key==="Enter")search()});
 document.querySelectorAll(".quick button").forEach(b=>b.addEventListener("click",()=>{q.value=b.dataset.plate;search()}));
+
+
+let repairTarget="", repairPlate="", repairVendor="";
+function isSafeRepairUrl(raw){
+  try{
+    const u=new URL(String(raw||"").trim());
+    return (u.protocol==="https:" || u.protocol==="http:") && !!u.hostname;
+  }catch(e){ return false; }
+}
+function openRepair(event,url,plate,vendor){
+  event.preventDefault();
+  if(!isSafeRepairUrl(url)){ showMsg("⚠️","ลิงก์แจ้งงานไม่ถูกต้อง","กรุณาติดต่อ GNR1 เพื่อตรวจสอบข้อมูล"); return; }
+  repairTarget=url; repairPlate=plate; repairVendor=vendor;
+  document.getElementById("repairInfo").innerHTML =
+    "ทะเบียนรถ: <b>"+esc(plate)+"</b><br>"+
+    (vendor ? "Vendor: <b>"+esc(vendor)+"</b><br>" : "")+
+    "<span style='color:#667085'>ระบบจะเปิดช่องทางแจ้งงานของรถคันนี้</span>";
+  document.getElementById("repairModal").classList.add("show");
+}
+function closeRepair(){ document.getElementById("repairModal").classList.remove("show"); }
+function goRepair(){
+  if(!isSafeRepairUrl(repairTarget)) return;
+  window.open(repairTarget,"_blank","noopener,noreferrer");
+  closeRepair();
+}
 
 let deferredPrompt=null;
 const installBtn=document.getElementById("installBtn"), installHelp=document.getElementById("installHelp");
