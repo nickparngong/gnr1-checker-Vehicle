@@ -1,11 +1,10 @@
-// Vehicle Check V2.3 - Backend FIX
-// Google Sheet: A:J existing fields, K = ลิงก์แจ้งซ่อม
+// Vehicle Check V3.1 - FINAL
 const SPREADSHEET_ID = "1XV_ETbWJFCrAPuYv59KVzq7vGbMVDBAWBweTf2QjGGE";
 const SHEET_NAME = "Vehicle_Master";
 
 function doGet(e) {
   try {
-    const plate = (e && e.parameter && e.parameter.plate) ? e.parameter.plate : "";
+    const plate = e && e.parameter && e.parameter.plate ? e.parameter.plate : "";
     return jsonResponse_(findVehicle_(plate));
   } catch (err) {
     return jsonResponse_({found:false, error:"เกิดข้อผิดพลาด: " + err.message});
@@ -25,46 +24,31 @@ function findVehicle_(plate) {
   const plateColumn = headers.findIndex(h => normalizeHeader_(h) === normalizeHeader_("ทะเบียนรถ"));
   if (plateColumn < 0) return {found:false, error:"ไม่พบคอลัมน์ ทะเบียนรถ"};
 
-  // Find K by header when possible; otherwise use column K (index 10)
-  // because the current sheet structure has K = ลิงก์แจ้งซ่อม.
   let repairColumn = headers.findIndex(h => normalizeHeader_(h) === normalizeHeader_("ลิงก์แจ้งซ่อม"));
   if (repairColumn < 0 && data[0].length >= 11) repairColumn = 10;
 
   const target = normalizePlate_(plate);
   if (!target) return {found:false, error:"ไม่ได้ระบุทะเบียนรถ"};
 
-  for (let i = 1; i < data.length; i++) {
+  for (let i=1;i<data.length;i++) {
     if (normalizePlate_(data[i][plateColumn]) === target) {
       const vehicle = {};
       headers.forEach((h,j) => vehicle[h] = data[i][j]);
-
-      // Dedicated field makes the frontend independent of header quirks.
       vehicle.repairLink = repairColumn >= 0 ? String(data[i][repairColumn] || "").trim() : "";
       vehicle.found = true;
       return vehicle;
     }
   }
-
   return {found:false, searched:plate};
 }
 
-function normalizePlate_(value) {
-  return String(value || "")
-    .replace(/\s/g,"")
-    .replace(/-/g,"")
-    .trim()
-    .toUpperCase();
+function normalizePlate_(v) {
+  return String(v || "").replace(/\s/g,"").replace(/-/g,"").trim().toUpperCase();
 }
-
-function normalizeHeader_(value) {
-  return String(value || "")
-    .replace(/\s/g,"")
-    .trim()
-    .toLowerCase();
+function normalizeHeader_(v) {
+  return String(v || "").replace(/\s/g,"").trim().toLowerCase();
 }
-
 function jsonResponse_(data) {
-  return ContentService
-    .createTextOutput(JSON.stringify(data))
+  return ContentService.createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
 }
