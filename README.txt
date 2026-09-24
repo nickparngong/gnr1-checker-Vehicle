@@ -11,9 +11,3 @@ VEHICLE CHECK V3.1 FINAL
 
 GitHub: อัปโหลดทั้งชุดได้ หากต้องการอัปเดตให้สมบูรณ์
 Google Apps Script: ต้อง Deploy Code.gs เป็น New version หลังเปลี่ยน Backend
-Google Sheet
-https://docs.google.com/spreadsheets/d/1XV_ETbWJFCrAPuYv59KVzq7vGbMVDBAWBweTf2QjGGE/edit
-
-Web App API
-https://script.google.com/macros/s/AKfycbxvGqGlvJ7vkq7r-trUFCGVTJx5BxrhuaSoEX-odnUvrtO6W7JkUFq3x75K0fW8nA6w/exec
-

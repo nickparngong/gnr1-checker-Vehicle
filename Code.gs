@@ -1,179 +1,54 @@
-var SPREADSHEET_ID = "1XV_ETbWJFCrAPuYv59KVzq7vGbMVDBAWBweTf2QjGGE";
-var SHEET_NAME = "Vehicle_Master_Template";
-var VERSION = "V4.2-VERIFIED";
+// Vehicle Check V3.1 - FINAL
+const SPREADSHEET_ID = "1XV_ETbWJFCrAPuYv59KVzq7vGbMVDBAWBweTf2QjGGE";
+const SHEET_NAME = "Vehicle_Master";
 
 function doGet(e) {
-  var plate = "";
-  var debug = false;
-
-  if (e && e.parameter) {
-    plate = e.parameter.plate || "";
-    debug = e.parameter.debug === "1";
-  }
-
   try {
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var sheet = ss.getSheetByName(SHEET_NAME);
-
-    if (!sheet) {
-      sheet = ss.getSheets()[0];
-    }
-
-    var data = sheet.getDataRange().getDisplayValues();
-
-    if (data.length < 2) {
-      return jsonResponse({
-        found: false,
-        version: VERSION,
-        error: "Sheet ไม่มีข้อมูลอย่างน้อย 2 แถว",
-        sheet: sheet.getName()
-      });
-    }
-
-    var headers = data[0];
-    var searchPlate = normalizePlate(plate);
-
-    if (debug) {
-      return jsonResponse({
-        found: false,
-        debug: true,
-        version: VERSION,
-        sheet: sheet.getName(),
-        rows: data.length,
-        headers: headers,
-        samplePlates: data.slice(1, Math.min(data.length, 11)).map(function(row) {
-          return row[0];
-        })
-      });
-    }
-
-    if (searchPlate === "") {
-      return jsonResponse({
-        found: false,
-        version: VERSION,
-        error: "กรุณาระบุทะเบียนรถ"
-      });
-    }
-
-    // จาก Sheet จริง: คอลัมน์ A คือ ทะเบียนรถ
-    // ใช้ตำแหน่งคอลัมน์โดยตรง เพื่อไม่ให้ชื่อหัวตาราง/ช่องว่างมีผลต่อการค้นหา
-    var plateColumn = 0;
-
-    for (var r = 1; r < data.length; r++) {
-      var currentPlate = normalizePlate(data[r][plateColumn]);
-
-      if (currentPlate === searchPlate) {
-        var vehicle = {
-          found: true,
-          version: VERSION,
-          sheet: sheet.getName()
-        };
-
-        // ส่งทุกคอลัมน์ตามหัวตารางจริง
-        for (var c = 0; c < headers.length; c++) {
-          var key = cleanHeader(headers[c]);
-
-          if (key !== "") {
-            vehicle[key] = data[r][c];
-          }
-        }
-
-        // ยืนยันตำแหน่งตาม Sheet ที่ผู้ใช้ให้มา
-        // I = บริษัทประกันภัย
-        // J = เบอร์โทรประกัน
-        // K = Linkแจ้งซ่อม
-        if (data[r].length > 8 && !vehicle["บริษัทประกันภัย"]) {
-          vehicle["บริษัทประกันภัย"] = data[r][8];
-        }
-
-        if (data[r].length > 9) {
-          vehicle["เบอร์โทรประกัน"] = data[r][9];
-        }
-
-        if (data[r].length > 10) {
-          vehicle["ลิงก์แจ้งซ่อม"] = data[r][10];
-          vehicle["Linkแจ้งซ่อม"] = data[r][10];
-        }
-
-        return jsonResponse(vehicle);
-      }
-    }
-
-    return jsonResponse({
-      found: false,
-      version: VERSION,
-      searched: plate,
-      normalized: searchPlate,
-      sheet: sheet.getName(),
-      error: "ไม่พบทะเบียนนี้ใน Sheet"
-    });
-
+    const plate = e && e.parameter && e.parameter.plate ? e.parameter.plate : "";
+    return jsonResponse_(findVehicle_(plate));
   } catch (err) {
-    return jsonResponse({
-      found: false,
-      version: VERSION,
-      error: String(err && err.message ? err.message : err)
-    });
+    return jsonResponse_({found:false, error:"เกิดข้อผิดพลาด: " + err.message});
   }
 }
 
-function testVehicle() {
-  var result = findVehicleForTest("3ฒก 4281");
-  Logger.log(JSON.stringify(result, null, 2));
-  return result;
-}
+function findVehicle_(plate) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sh = ss.getSheetByName(SHEET_NAME);
+  if (!sh) sh = ss.getSheets()[0];
+  if (!sh) return {found:false, error:"ไม่พบ Sheet"};
 
-function findVehicleForTest(plate) {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  var sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
-  var data = sheet.getDataRange().getDisplayValues();
-  var headers = data[0];
-  var target = normalizePlate(plate);
+  const data = sh.getDataRange().getDisplayValues();
+  if (data.length < 2) return {found:false, error:"ไม่พบข้อมูลใน Sheet"};
 
-  for (var r = 1; r < data.length; r++) {
-    if (normalizePlate(data[r][0]) === target) {
-      return {
-        PASS: true,
-        version: VERSION,
-        sheet: sheet.getName(),
-        plate: data[r][0],
-        vendor: data[r][2],
-        insurance: data[r][8],
-        insurancePhone: data[r][9],
-        repairLink: data[r][10]
-      };
+  const headers = data[0].map(h => String(h).trim());
+  const plateColumn = headers.findIndex(h => normalizeHeader_(h) === normalizeHeader_("ทะเบียนรถ"));
+  if (plateColumn < 0) return {found:false, error:"ไม่พบคอลัมน์ ทะเบียนรถ"};
+
+  let repairColumn = headers.findIndex(h => normalizeHeader_(h) === normalizeHeader_("ลิงก์แจ้งซ่อม"));
+  if (repairColumn < 0 && data[0].length >= 11) repairColumn = 10;
+
+  const target = normalizePlate_(plate);
+  if (!target) return {found:false, error:"ไม่ได้ระบุทะเบียนรถ"};
+
+  for (let i=1;i<data.length;i++) {
+    if (normalizePlate_(data[i][plateColumn]) === target) {
+      const vehicle = {};
+      headers.forEach((h,j) => vehicle[h] = data[i][j]);
+      vehicle.repairLink = repairColumn >= 0 ? String(data[i][repairColumn] || "").trim() : "";
+      vehicle.found = true;
+      return vehicle;
     }
   }
-
-  return {
-    PASS: false,
-    version: VERSION,
-    sheet: sheet.getName(),
-    searched: plate
-  };
+  return {found:false, searched:plate};
 }
 
-function cleanHeader(value) {
-  return String(value || "")
-    .replace(/[\u200B-\u200D\uFEFF]/g, "")
-    .trim();
+function normalizePlate_(v) {
+  return String(v || "").replace(/\s/g,"").replace(/-/g,"").trim().toUpperCase();
 }
-
-function normalizePlate(value) {
-  if (value === null || value === undefined) {
-    return "";
-  }
-
-  return String(value)
-    .normalize("NFKC")
-    .replace(/[\u200B-\u200D\uFEFF]/g, "")
-    .replace(/[\s\u00A0\-]/g, "")
-    .trim()
-    .toUpperCase();
+function normalizeHeader_(v) {
+  return String(v || "").replace(/\s/g,"").trim().toLowerCase();
 }
-
-function jsonResponse(data) {
-  return ContentService
-    .createTextOutput(JSON.stringify(data))
+function jsonResponse_(data) {
+  return ContentService.createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
 }
