@@ -1,0 +1,5 @@
+Static JavaScript syntax: PASS
+Fixture lookup 3ฒก 4281: PASS
+Expected phone: 02-636-5656
+Expected repair: https://lin.ee/e309Y8
+Live Google Apps Script endpoint could not be reached from this execution environment, so live deployment was not claimed as tested.

@@ -1,81 +1,162 @@
 var SPREADSHEET_ID = "1XV_ETbWJFCrAPuYv59KVzq7vGbMVDBAWBweTf2QjGGE";
+var SHEET_NAME = "Vehicle_Master_Template";
+var VERSION = "V4.2-VERIFIED";
 
 function doGet(e) {
   var plate = "";
+  var debug = false;
 
-  if (e && e.parameter && e.parameter.plate) {
-    plate = e.parameter.plate;
+  if (e && e.parameter) {
+    plate = e.parameter.plate || "";
+    debug = e.parameter.debug === "1";
   }
 
   try {
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var sheets = ss.getSheets();
+    var sheet = ss.getSheetByName(SHEET_NAME);
+
+    if (!sheet) {
+      sheet = ss.getSheets()[0];
+    }
+
+    var data = sheet.getDataRange().getDisplayValues();
+
+    if (data.length < 2) {
+      return jsonResponse({
+        found: false,
+        version: VERSION,
+        error: "Sheet ไม่มีข้อมูลอย่างน้อย 2 แถว",
+        sheet: sheet.getName()
+      });
+    }
+
+    var headers = data[0];
     var searchPlate = normalizePlate(plate);
 
-    if (searchPlate === "") {
-      return jsonResponse({ found: false, error: "กรุณาระบุทะเบียนรถ" });
+    if (debug) {
+      return jsonResponse({
+        found: false,
+        debug: true,
+        version: VERSION,
+        sheet: sheet.getName(),
+        rows: data.length,
+        headers: headers,
+        samplePlates: data.slice(1, Math.min(data.length, 11)).map(function(row) {
+          return row[0];
+        })
+      });
     }
 
-    for (var s = 0; s < sheets.length; s++) {
-      var sheet = sheets[s];
-      var data = sheet.getDataRange().getDisplayValues();
+    if (searchPlate === "") {
+      return jsonResponse({
+        found: false,
+        version: VERSION,
+        error: "กรุณาระบุทะเบียนรถ"
+      });
+    }
 
-      if (data.length < 2) {
-        continue;
-      }
+    // จาก Sheet จริง: คอลัมน์ A คือ ทะเบียนรถ
+    // ใช้ตำแหน่งคอลัมน์โดยตรง เพื่อไม่ให้ชื่อหัวตาราง/ช่องว่างมีผลต่อการค้นหา
+    var plateColumn = 0;
 
-      var headers = data[0];
-      var plateColumn = -1;
+    for (var r = 1; r < data.length; r++) {
+      var currentPlate = normalizePlate(data[r][plateColumn]);
 
-      for (var h = 0; h < headers.length; h++) {
-        var header = String(headers[h]).trim();
-        if (header === "ทะเบียนรถ" || header.indexOf("ทะเบียน") !== -1) {
-          plateColumn = h;
-          break;
+      if (currentPlate === searchPlate) {
+        var vehicle = {
+          found: true,
+          version: VERSION,
+          sheet: sheet.getName()
+        };
+
+        // ส่งทุกคอลัมน์ตามหัวตารางจริง
+        for (var c = 0; c < headers.length; c++) {
+          var key = cleanHeader(headers[c]);
+
+          if (key !== "") {
+            vehicle[key] = data[r][c];
+          }
         }
-      }
 
-      if (plateColumn === -1) {
-        continue;
-      }
-
-      for (var r = 1; r < data.length; r++) {
-        if (normalizePlate(data[r][plateColumn]) === searchPlate) {
-          var vehicle = { found: true, sheet: sheet.getName() };
-
-          for (var c = 0; c < headers.length; c++) {
-            var key = String(headers[c]).trim();
-            if (key !== "") {
-              vehicle[key] = data[r][c];
-            }
-          }
-
-          // รองรับโครงสร้างเดิม: J = เบอร์โทรประกัน, K = ลิงก์แจ้งซ่อม
-          if (!vehicle["เบอร์โทรประกัน"] && data[r].length > 9) {
-            vehicle["เบอร์โทรประกัน"] = data[r][9];
-          }
-
-          if (!vehicle["ลิงก์แจ้งซ่อม"] && data[r].length > 10) {
-            vehicle["ลิงก์แจ้งซ่อม"] = data[r][10];
-          }
-
-          return jsonResponse(vehicle);
+        // ยืนยันตำแหน่งตาม Sheet ที่ผู้ใช้ให้มา
+        // I = บริษัทประกันภัย
+        // J = เบอร์โทรประกัน
+        // K = Linkแจ้งซ่อม
+        if (data[r].length > 8 && !vehicle["บริษัทประกันภัย"]) {
+          vehicle["บริษัทประกันภัย"] = data[r][8];
         }
+
+        if (data[r].length > 9) {
+          vehicle["เบอร์โทรประกัน"] = data[r][9];
+        }
+
+        if (data[r].length > 10) {
+          vehicle["ลิงก์แจ้งซ่อม"] = data[r][10];
+          vehicle["Linkแจ้งซ่อม"] = data[r][10];
+        }
+
+        return jsonResponse(vehicle);
       }
     }
 
     return jsonResponse({
       found: false,
+      version: VERSION,
       searched: plate,
-      error: "ไม่พบทะเบียนนี้ในทุก Sheet"
+      normalized: searchPlate,
+      sheet: sheet.getName(),
+      error: "ไม่พบทะเบียนนี้ใน Sheet"
     });
 
-  } catch (error) {
+  } catch (err) {
     return jsonResponse({
       found: false,
-      error: String(error)
+      version: VERSION,
+      error: String(err && err.message ? err.message : err)
     });
   }
+}
+
+function testVehicle() {
+  var result = findVehicleForTest("3ฒก 4281");
+  Logger.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
+function findVehicleForTest(plate) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(SHEET_NAME) || ss.getSheets()[0];
+  var data = sheet.getDataRange().getDisplayValues();
+  var headers = data[0];
+  var target = normalizePlate(plate);
+
+  for (var r = 1; r < data.length; r++) {
+    if (normalizePlate(data[r][0]) === target) {
+      return {
+        PASS: true,
+        version: VERSION,
+        sheet: sheet.getName(),
+        plate: data[r][0],
+        vendor: data[r][2],
+        insurance: data[r][8],
+        insurancePhone: data[r][9],
+        repairLink: data[r][10]
+      };
+    }
+  }
+
+  return {
+    PASS: false,
+    version: VERSION,
+    sheet: sheet.getName(),
+    searched: plate
+  };
+}
+
+function cleanHeader(value) {
+  return String(value || "")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .trim();
 }
 
 function normalizePlate(value) {
@@ -84,8 +165,9 @@ function normalizePlate(value) {
   }
 
   return String(value)
-    .replace(/\s+/g, "")
-    .replace(/-/g, "")
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/[\s\u00A0\-]/g, "")
     .trim()
     .toUpperCase();
 }
